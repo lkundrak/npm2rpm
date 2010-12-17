@@ -27,28 +27,54 @@ open (SPEC, ">$specdir/nodejs-$metadata->{name}.spec")
 	or die $!;
 
 my $tarball = $sourcedir.[$metadata->{dist}{tarball} =~ /(\/[^\/]+)$/]->[0];
-mirror ($metadata->{dist}{tarball}, $tarball);
+mirror ($metadata->{dist}{tarball}, $tarball) or die $!;
 
 my $dir = [`tar tzf $tarball` =~ /([^\/]+)/]->[0];
 $dir =~ s/$metadata->{version}/%{version}/g;
+$dir =~ s/$metadata->{name}/%{npmname}/g;
 
 my $source = $metadata->{dist}{tarball};
 $source =~ s/$metadata->{version}/%{version}/g;
+$source =~ s/$metadata->{name}/%{npmname}/g;
+
+my @dependencies;
+foreach my $name (keys %{$metadata->{dependencies}}) {
+	my $version = $metadata->{dependencies}{$name};
+	$version =~ s/([>=<]+\s*)/$1 /;
+	push @dependencies, "BuildRequires:  nodejs-$name $version";
+	push @dependencies, "Requires:       nodejs-$name $version";
+	@dependencies = sort @dependencies;
+}
+@dependencies = ('', @dependencies, '') if @dependencies;
+
+my @bininst;
+my @binfiles;
+for my $bin (map { $_, "$_@%{version}" } keys %{$metadata->{bin}}) {
+	push @bininst, "install -p usr/bin/$bin \$RPM_BUILD_ROOT%{_bindir}";
+	push @binfiles, "%{_bindir}/$bin";
+}
+@bininst = ('', 'mkdir -p $RPM_BUILD_ROOT%{_bindir}', @bininst) if @bininst;
+@binfiles = (@binfiles, '') if @binfiles;
 
 print SPEC <<EOF;
-Name:           nodejs-$metadata->{name}
+%global npmname $metadata->{name}
+
+Name:           nodejs-%{npmname}
 Version:        $metadata->{version}
 Release:        1%{?dist}
 Summary:        $metadata->{description}
 
 Group:          Development/Libraries
-License:        MIT
+License:        $metadata->{licenses}{type}
 URL:            FIXME
 Source0:        $source
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 BuildRequires:  npm
 Requires:       nodejs
+EOF
+print SPEC join "\n", @dependencies;
+print SPEC <<EOF;
 
 BuildArch:      noarch
 
@@ -61,14 +87,27 @@ $metadata->{description}
 
 
 %build
+mkdir -p .%{_prefix}/lib/node/.npm
+cp -a %{_prefix}/lib/node/.npm/* \\
+	.%{_prefix}/lib/node/.npm
+
+npm_config_root=.%{_prefix}/lib/node \\
+npm_config_binroot=.%{_bindir} \\
+npm_config_manroot=.%{_mandir} \\
+npm install %{SOURCE0}
 
 
 %install
 rm -rf \$RPM_BUILD_ROOT
-npm_config_root=\$RPM_BUILD_ROOT%{_prefix}/lib/node \\
-npm_config_binroot=\$RPM_BUILD_ROOT%{_bindir} \\
-npm_config_manroot=\$RPM_BUILD_ROOT%{_mandir} \\
-npm install %{SOURCE0}
+
+mkdir -p \$RPM_BUILD_ROOT%{_prefix}/lib/node{,/.npm}
+cp -a \$PWD%{_prefix}/lib/node/%{npmname}{,@%{version}} \\
+	\$RPM_BUILD_ROOT%{_prefix}/lib/node
+cp -a \$PWD%{_prefix}/lib/node/.npm/%{npmname} \\
+	\$RPM_BUILD_ROOT%{_prefix}/lib/node/.npm
+EOF
+print SPEC join "\n", @bininst;
+print SPEC <<EOF;
 
 
 %clean
@@ -77,9 +116,12 @@ rm -rf \$RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
-%{_prefix}/lib/node/$metadata->{name}*
-%{_prefix}/lib/node/.npm/$metadata->{name}*
-%exclude %{_prefix}/lib/node/.npm/.cache
+%{_prefix}/lib/node/%{npmname}
+%{_prefix}/lib/node/%{npmname}@%{version}
+%{_prefix}/lib/node/.npm/%{npmname}
+EOF
+print SPEC join "\n", @binfiles;
+print SPEC <<EOF;
 %doc LICENSE*
 
 
