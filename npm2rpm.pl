@@ -70,8 +70,8 @@ URL:            FIXME
 Source0:        $source
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
-BuildRequires:  npm
-Requires:       nodejs
+BuildRequires:  nodejs-npm
+Requires:       nodejs-npm
 EOF
 print SPEC join "\n", @dependencies;
 print SPEC <<EOF;
