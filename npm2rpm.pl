@@ -42,8 +42,8 @@ my $specdir = `rpm --eval '%{_specdir}'`;
 chomp $specdir;
 my $date = `date +'%a %b %d %Y'`;
 chomp $date;
-my $user = $ENV{USER};
-my $email = [split (/:/, `getent passwd $user`)]->[4];
+my $email = $ENV{USER};
+my $user = [split (/:/, `getent passwd $user`)]->[4];
 my $package;
 
 # Parse command line options
