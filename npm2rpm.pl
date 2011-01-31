@@ -96,7 +96,6 @@ foreach my $name (keys %{$metadata->{dependencies}}) {
 	my $version = $metadata->{dependencies}{$name};
 	$version =~ s/([>=<]+\s*)/$1 /;
 	push @dependencies, "BuildRequires:  nodejs-$name $version";
-	push @dependencies, "Requires:       nodejs-$name $version";
 	@dependencies = sort @dependencies;
 }
 @dependencies = ('', @dependencies, '') if @dependencies;
@@ -133,11 +132,11 @@ URL:            FIXME
 Source0:        $source
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
+EOF
+print SPEC join "", @dependencies;
+print SPEC <<EOF;
 BuildRequires:  nodejs-npm
 Requires:       nodejs-npm
-EOF
-print SPEC join "\n", @dependencies;
-print SPEC <<EOF;
 
 BuildArch:      noarch
 
