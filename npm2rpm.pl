@@ -43,7 +43,7 @@ chomp $specdir;
 my $date = `date +'%a %b %d %Y'`;
 chomp $date;
 my $email = $ENV{USER};
-my $user = [split (/:/, `getent passwd $user`)]->[4];
+my $user = [split (/:/, `getent passwd $email`)]->[4];
 my $package;
 
 # Parse command line options
@@ -111,9 +111,16 @@ for my $bin (map { $_, "$_@%{version}" } keys %{$metadata->{bin}}) {
 @bininst = ('', 'mkdir -p $RPM_BUILD_ROOT%{_bindir}', @bininst) if @bininst;
 @binfiles = (@binfiles, '') if @binfiles;
 
+# Several packages are broken enough to lack this
+my $license = $metadata->{licenses}{type} || 'FIXME: Tell upstream to fix this';
+
 # Fill in the template
 print SPEC <<EOF;
 %global npmname $metadata->{name}
+
+%global _use_internal_dependency_generator 0
+%global __find_provides /bin/sh -c 'sed -n "s,.*/\\\\.npm/\\\\([^\\\\/]*\\\\)\\\\/\\\\([^/]*\\\\.[^/]*\\\\)/.*,nodejs(\\\\1) = \\\\2,p" |sort |uniq'
+%global __find_requires /bin/sh -c 'sed -n "s,.*/dependson/\\\\([^@\\\\/]*\\\\)@\\\\([^@/]\\\\.[^@/]*\\\\)\$,nodejs(\\\\1) = \\\\2,p" |sort |uniq'
 
 Name:           nodejs-%{npmname}
 Version:        $metadata->{version}
@@ -121,7 +128,7 @@ Release:        1%{?dist}
 Summary:        $metadata->{description}
 
 Group:          Development/Libraries
-License:        $metadata->{licenses}{type}
+License:        $license
 URL:            FIXME
 Source0:        $source
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
@@ -156,11 +163,11 @@ npm install %{SOURCE0}
 %install
 rm -rf \$RPM_BUILD_ROOT
 
-mkdir -p \$RPM_BUILD_ROOT%{_prefix}/lib/node{,/.npm}
+mkdir -p \$RPM_BUILD_ROOT%{_prefix}/lib/node/.npm/%{npmname}
 cp -a \$PWD%{_prefix}/lib/node/%{npmname}{,@%{version}} \\
 	\$RPM_BUILD_ROOT%{_prefix}/lib/node
-cp -a \$PWD%{_prefix}/lib/node/.npm/%{npmname} \\
-	\$RPM_BUILD_ROOT%{_prefix}/lib/node/.npm
+cp -a \$PWD%{_prefix}/lib/node/.npm/%{npmname}/{%{version},active} \\
+	\$RPM_BUILD_ROOT%{_prefix}/lib/node/.npm/%{npmname}
 EOF
 print SPEC join "\n", @bininst;
 print SPEC <<EOF;
